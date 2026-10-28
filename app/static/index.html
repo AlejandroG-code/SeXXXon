@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Asynchronous Report Generator | RabbitMQ</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    code, pre { font-family: 'JetBrains Mono', monospace; }
+    [v-cloak] { display: none; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+  <div id="app" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <header class="flex flex-col md:flex-row md:items-center md:justify-between pb-6 border-b border-slate-800 gap-4">
+      <div>
+        <div class="flex items-center gap-3">
+          <div class="p-2.5 bg-indigo-600/20 text-indigo-400 rounded-xl border border-indigo-500/30">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-2xl font-bold tracking-tight text-white">Async Report Generator</h1>
+            <p class="text-sm text-slate-400">Background processing powered by RabbitMQ & PostgreSQL</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Health Badges & Actions -->
+      <div class="flex items-center gap-3">
+        <div id="system-status" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs">
+          <span id="health-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span id="health-text" class="text-slate-300 font-medium">Checking System...</span>
+        </div>
+
+        <button id="reconcile-btn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+          </svg>
+          Reconcile Pending
+        </button>
+
+        <a href="/docs" target="_blank" class="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-xs font-medium text-indigo-300 border border-indigo-500/30 transition">
+          Swagger Docs
+        </a>
+      </div>
+    </header>
+
+    <!-- Top Grid: Request Form & Metrics Overview -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+      <!-- Create Report Card -->
+      <div class="lg:col-span-1 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <h2 class="text-lg font-semibold text-white flex items-center gap-2 mb-4">
+          <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          Request Sales Report
+        </h2>
+
+        <form id="report-form" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Report Type</label>
+            <select id="report-type" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+              <option value="sales" selected>Sales Report (Supported)</option>
+              <option value="inventory">Inventory (Unsupported - Test 400)</option>
+            </select>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Start Date</label>
+              <input type="date" id="start-date" value="2025-01-01" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">End Date</label>
+              <input type="date" id="end-date" value="2026-12-31" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-xs font-medium text-slate-300">Idempotency Key</label>
+              <button type="button" id="gen-key-btn" class="text-xs text-indigo-400 hover:text-indigo-300 underline">Generate Key</button>
+            </div>
+            <input type="text" id="idempotency-key" placeholder="Optional unique request key" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500">
+          </div>
+
+          <div class="p-3 bg-slate-950/70 rounded-xl border border-slate-800/80">
+            <label class="block text-xs font-medium text-amber-400 mb-1 flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+              </svg>
+              Test Failure Injection Hook
+            </label>
+            <select id="simulate-failure" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500">
+              <option value="">Normal Operation (No Failure)</option>
+              <option value="transient">Simulate Transient Error (Auto Retry)</option>
+              <option value="permanent">Simulate Permanent Error (DLQ Exhaustion)</option>
+            </select>
+            <p class="text-[11px] text-slate-500 mt-1">Simulates network or worker crashes for scenario validation.</p>
+          </div>
+
+          <button type="submit" id="submit-btn" class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 font-medium rounded-lg text-sm text-white transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30">
+            <span>Submit Asynchronous Request</span>
+          </button>
+        </form>
+
+        <div id="form-alert" class="mt-4 hidden p-3 rounded-lg text-xs"></div>
+      </div>
+
+      <!-- System Metrics & Queue Status -->
+      <div class="lg:col-span-2 space-y-6">
+        <!-- Metric Counters -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <span class="text-xs font-medium text-slate-400">Total Jobs</span>
+            <div id="stat-total" class="text-2xl font-bold text-white mt-1">0</div>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <span class="text-xs font-medium text-blue-400">Queued / Active</span>
+            <div id="stat-active" class="text-2xl font-bold text-blue-400 mt-1">0</div>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <span class="text-xs font-medium text-emerald-400">Completed</span>
+            <div id="stat-completed" class="text-2xl font-bold text-emerald-400 mt-1">0</div>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <span class="text-xs font-medium text-rose-400">Retrying / Failed</span>
+            <div id="stat-failed" class="text-2xl font-bold text-rose-400 mt-1">0</div>
+          </div>
+        </div>
+
+        <!-- Architecture Quick Info Box -->
+        <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
+          <h3 class="text-sm font-semibold text-slate-200 mb-2 flex items-center gap-2">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            System Guarantees & Lifecycle
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-400">
+            <div class="p-3 bg-slate-950/50 rounded-xl border border-slate-800/60">
+              <span class="font-medium text-slate-200 block mb-1">Durability</span>
+              Persistent messages, durable queues, and PostgreSQL transaction commits before ACK.
+            </div>
+            <div class="p-3 bg-slate-950/50 rounded-xl border border-slate-800/60">
+              <span class="font-medium text-slate-200 block mb-1">Fair Distribution</span>
+              Workers consume with <code>prefetch_count=1</code>, ensuring even distribution across workers.
+            </div>
+            <div class="p-3 bg-slate-950/50 rounded-xl border border-slate-800/60">
+              <span class="font-medium text-slate-200 block mb-1">Bounded Retries</span>
+              Max 3 attempts with delayed retry queue TTL; exhausted jobs routed to Dead-Letter Queue.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reports Table Card -->
+    <div class="mt-8 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+      <div class="p-5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 class="text-lg font-semibold text-white">Live Report Queue & History</h2>
+          <p class="text-xs text-slate-400 mt-0.5">Auto-refreshing every 2 seconds</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="refresh-btn" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg border border-slate-700 transition flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            Refresh Now
+          </button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-950 text-slate-400 uppercase tracking-wider text-[11px] border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-4">Report ID</th>
+              <th class="py-3 px-4">Status</th>
+              <th class="py-3 px-4">Date Range</th>
+              <th class="py-3 px-4 text-center">Attempts</th>
+              <th class="py-3 px-4 text-right">Rows</th>
+              <th class="py-3 px-4">Worker ID</th>
+              <th class="py-3 px-4">Timestamps</th>
+              <th class="py-3 px-4 text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody id="reports-table-body" class="divide-y divide-slate-800/60 font-normal">
+            <tr>
+              <td colspan="8" class="text-center py-8 text-slate-500">Loading reports...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

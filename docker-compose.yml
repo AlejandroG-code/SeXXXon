@@ -1,0 +1,131 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: report_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_password
+      POSTGRES_DB: reports_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d reports_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: report_rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+  api:
+    build: .
+    container_name: report_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres_password@db:5432/reports_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_MANAGEMENT_URL: http://rabbitmq:15672/
+      STORAGE_DIR: /app/storage/reports
+      WORKER_PROCESSING_DELAY_SECONDS: 5
+      RETRY_DELAY_SECONDS: 5
+      MAX_ATTEMPTS: 3
+    volumes:
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+      - report_storage:/app/storage/reports
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  worker1:
+    build: .
+    container_name: report_worker_1
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker.consumer", "worker-1"]
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres_password@db:5432/reports_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      STORAGE_DIR: /app/storage/reports
+      WORKER_PROCESSING_DELAY_SECONDS: 5
+      RETRY_DELAY_SECONDS: 5
+      MAX_ATTEMPTS: 3
+    volumes:
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+      - report_storage:/app/storage/reports
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  worker2:
+    build: .
+    container_name: report_worker_2
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker.consumer", "worker-2"]
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres_password@db:5432/reports_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      STORAGE_DIR: /app/storage/reports
+      WORKER_PROCESSING_DELAY_SECONDS: 5
+      RETRY_DELAY_SECONDS: 5
+      MAX_ATTEMPTS: 3
+    volumes:
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+      - report_storage:/app/storage/reports
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  worker3:
+    build: .
+    container_name: report_worker_3
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker.consumer", "worker-3"]
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres_password@db:5432/reports_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      STORAGE_DIR: /app/storage/reports
+      WORKER_PROCESSING_DELAY_SECONDS: 5
+      RETRY_DELAY_SECONDS: 5
+      MAX_ATTEMPTS: 3
+    volumes:
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+      - report_storage:/app/storage/reports
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  report_storage:

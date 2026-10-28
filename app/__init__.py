@@ -1,0 +1,1 @@
+"""Async Report Generator Application."""

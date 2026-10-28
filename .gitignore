@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+storage/reports/*
+!storage/reports/.gitkeep
+.env
+*.log
+benchmark_*.json
